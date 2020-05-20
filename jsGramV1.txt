@@ -1,0 +1,455 @@
+/******************************************************************************
+* Fichier: jsGram.ycc.
+* Desc: grammaire en yacc pour compiler le langage JScript.
+* Module: AkraLog : JScripter.
+* Revision: 5 novembre 1997 : REV 0 : Hugo DesRosiers : Creation.
+******************************************************************************/
+
+%{
+/* On met ici les declaration et les fichiers inclus */
+
+#include <stdio.h>
+#undef yylex
+#include "jscFlexer.h"
+#define yylex jscrlex
+#include "specialTypes.h"
+
+#define YYDEBUG	1
+
+extern void jscrerror(char *);
+extern int jscrlex(void);
+
+%}
+
+
+/**************************************************************
+* Keywords of the language, and other meta-characters.
+**************************************************************/
+%token IDENTIFIER_KW
+%token LITERAL_BOOLEAN
+%token LITERAL_FLOAT
+%token LITERAL_INT
+%token LITERAL_LONG
+%token LITERAL_STRING
+%token LITERAL_NULL
+
+%token ABSTRACT_KW
+%token BOOLEAN_KW
+%token BREAK_KW
+%token BYTE_KW
+%token CASE_KW
+%token CATCH_KW
+%token CHAR_KW
+%token CLASS_KW
+%token CONST_KW
+%token CONTINUE_KW
+%token DEFAULT_KW
+%token DELETE_KW
+%token DO_KW
+%token DOUBLE_KW
+%token ELSE_KW
+%token EXTENDS_KW
+%token FINAL_KW
+%token FINALLY_KW
+%token FLOAT_KW
+%token FOR_KW
+%token FUNCTION_KW
+%token GOTO_KW
+%token IF_KW
+%token IMPLEMENTS_KW
+%token IMPORT_KW
+%token IN_KW
+%token INSTANCEOF_KW
+%token INT_KW
+%token INTERFACE_KW
+%token LONG_KW
+%token NATIVE_KW
+%token NEW_KW
+%token PACKAGE_KW
+%token PRIVATE_KW
+%token PROTECTED_KW
+%token PUBLIC_KW
+%token RETURN_KW
+%token SHORT_KW
+%token STATIC_KW
+%token SUPER_KW
+%token SWITCH_KW
+%token SYNCHRONIZED_KW
+%token THIS_KW
+%token THROW_KW
+%token THROWS_KW
+%token TRANSIENT_KW
+%token TRY_KW
+%token TYPEOF_KW
+%token VAR_KW
+%token VOID_KW
+%token VOLATILE_KW
+%token WHILE_KW
+%token WITH_KW
+
+%token LS_KW
+%token URS_KW
+%token RS_KW
+%token ICR_KW
+%token DECR_KW
+%token ANDAND_KW
+%token OROR_KW
+%token PLUSASSIGN_KW
+%token MINUSASSIGN_KW
+%token TIMEASSIGN_KW
+%token DIVIDEASSIGN_KW
+%token ANDASSIGN_KW
+%token ORASSIGN_KW
+%token NOTASSIGN_KW
+%token MODASSIGN_KW
+%token LSASSIGN_KW
+%token RSASSIGN_KW
+%token URSASSIGN_KW
+
+/****************************************************************
+* Container for all elements produced during parsing.
+****************************************************************/
+
+%union
+{
+    bool boolValue;
+    wchar *string;
+    int	 integerNumber;
+    unsigned int flag;
+    float floatNumber;
+    int longNumber[2];
+    double doubleNumber;
+}
+
+
+/****************************************************************
+* Section: Typing of the objects returned by the non-terminals.
+****************************************************************/
+
+/*
+%type <string> IDENTIFIER_KW
+%type <expression> Literal
+%type <boolValue> LITERAL_BOOLEAN
+%type <floatNumber> LITERAL_FLOAT
+%type <integerNumber> LITERAL_INT
+%type <string> LITERAL_STRING
+%type <int> LITERAL_NULL
+*/
+
+
+%left ';'
+%right '='
+%left '(' ')'
+%left ','
+%left '?'
+%left '|'
+%left '^'
+%left '&'
+%left EQ_KW NE_KW
+%left '>' '<' GE_KW LE_KW 
+/*
+%left '>' '<' '=' GE_KW LE_KW NE_KW
+*/
+%left URS_KW RS_KW LS_KW
+%right  '~'
+%left '+' '-'
+%left '*' '/' '%'
+%left '.'
+
+
+%start Program
+
+/* --------------- Debut de la grammaire --------------- */
+%%
+
+/* Compilation Unit. */
+Program:
+    /* Nothing */
+    | ElementList
+
+ElementList:
+    Element
+  | ElementList Element
+
+
+Element:
+    Statement
+  | FunctionDefinition
+
+
+FunctionDefinition:
+    FUNCTION_KW Identifier '(' ParameterList.Opt ')' '{' BlockStatements.Opt '}'
+
+
+/**** Statements. ****/
+
+Statement:
+  IfThenStat
+  | WhileStat
+  | ForStat
+  | BreakStat
+  | ContinueStat
+  | ReturnStat
+  | WithStat
+  | ForInStat
+  | VariablesOrExpression
+  | ';'
+
+
+IfThenStat:
+    IF_KW '(' Expression ')' Block
+  | IF_KW '(' Expression ')' Block ELSE_KW Block
+
+
+WhileStat:
+    WHILE_KW '(' Expression ')' Block
+
+ForStat:
+    FOR_KW '(' ForInit.Opt ';' Expression.Opt ';' Expression.Opt ')' Block
+
+
+ForInit.Opt:
+    /* Nothing. */
+  | ForInit
+
+
+ForInit:
+    Expression
+  | VariableDeclaration
+
+
+Expression.Opt:
+    /* Nothing. */
+  | Expression
+
+
+BreakStat:
+    BREAK_KW ';'
+
+
+ContinueStat:
+    CONTINUE_KW ';'
+
+
+ReturnStat:
+    RETURN_KW Expression ';'
+  | RETURN_KW ';'
+
+WithStat:
+    WITH_KW '(' Expression ')' Block
+
+
+ForInStat:
+    FOR_KW '(' ForInit.Opt IN_KW Expression ')' Block
+
+
+ParameterList.Opt:
+    /* Nothing. */
+  | ParameterList
+
+
+ParameterList:
+    Identifier
+  | ParameterList ',' Identifier
+
+
+
+Block:
+    Statement
+  | '{' BlockStatements '}'
+  | '{' '}'
+
+
+BlockStatements.Opt:
+    /* Nothing. */
+  | BlockStatements
+
+
+BlockStatements:
+    BlockStatement
+  | BlockStatements BlockStatement
+
+BlockStatement:
+/* MOD-980619 [HD]: Elimination of reduce/reduce.
+    VariableDeclarationStatement
+  | Statement
+*/
+    Statement
+
+
+VariablesOrExpression:
+    VariableDeclarationStatement
+  | AssignmentExpr
+
+VariableDeclarationStatement:
+    VariableDeclaration
+
+VariableDeclaration:
+    VAR_KW VariableDeclarators
+
+VariableDeclarators:
+    VariableDeclarator
+  | VariableDeclarators ',' VariableDeclarator
+
+
+VariableDeclarator:
+    Identifier
+  | Identifier '=' AssignmentExpr
+
+
+/**** Expressions. ****/
+
+
+MemberExpr:
+    PrimaryExpr
+  | MemberExpr '[' Expression ']'
+  | MemberExpr '(' ArgumentList.Opt ')'
+  | MemberExpr '.' Identifier
+
+
+PrimaryExpr:
+    Literal
+  | Identifier
+  | THIS_KW
+  | '(' Expression ')'
+
+
+ArgumentList.Opt:
+    /* Nothing. */
+  | ArgumentList
+
+
+ArgumentList:
+    AssignmentExpr
+  | ArgumentList ',' AssignmentExpr
+
+
+UnaryExpr:
+    MemberExpr
+  | '!' UnaryExpr
+  | '~' UnaryExpr
+  | '-' UnaryExpr
+  | ICR_KW MemberExpr
+  | DECR_KW MemberExpr
+  | MemberExpr ICR_KW
+  | MemberExpr DECR_KW
+  | NEW_KW Constructor
+  | DELETE_KW MemberExpr
+  | TYPEOF_KW UnaryExpr
+  | VOID_KW UnaryExpr
+
+
+MultiplicativeExpr:
+    UnaryExpr
+  | MultiplicativeExpr '*' UnaryExpr
+  | MultiplicativeExpr '/' UnaryExpr
+  | MultiplicativeExpr '%' UnaryExpr
+
+
+AdditiveExpr:
+    MultiplicativeExpr
+  | AdditiveExpr '+' MultiplicativeExpr
+  | AdditiveExpr '-' MultiplicativeExpr
+
+  
+ShiftExpr:
+    AdditiveExpr
+  | ShiftExpr LS_KW AdditiveExpr
+  | ShiftExpr RS_KW AdditiveExpr
+  | ShiftExpr URS_KW AdditiveExpr
+
+
+RelationalExpr:
+    ShiftExpr
+  | RelationalExpr '<' ShiftExpr
+  | RelationalExpr '>' ShiftExpr
+  | RelationalExpr GE_KW ShiftExpr
+  | RelationalExpr LE_KW ShiftExpr
+
+
+EqualityExpr:
+    RelationalExpr
+  | EqualityExpr EQ_KW RelationalExpr
+  | EqualityExpr NE_KW RelationalExpr
+
+
+AndExpr:
+    EqualityExpr
+  | AndExpr '&' EqualityExpr
+
+
+ExclusiveOrExpr:
+    AndExpr
+  | ExclusiveOrExpr '^' AndExpr
+
+
+InclusiveOrExpr:
+    ExclusiveOrExpr
+  | InclusiveOrExpr '|' ExclusiveOrExpr
+
+
+ConditionalAndExpr:
+    InclusiveOrExpr
+  | ConditionalAndExpr ANDAND_KW InclusiveOrExpr
+
+
+ConditionalOrExpression:
+    ConditionalAndExpr
+  | ConditionalOrExpression OROR_KW ConditionalAndExpr
+
+
+ConditionalExpression:
+    ConditionalOrExpression
+  | ConditionalOrExpression '?' AssignmentExpr ':' AssignmentExpr
+
+
+AssignmentExpr:
+    ConditionalExpression
+  | AssignmentExpr AssignmentOperator ConditionalExpression
+
+
+AssignmentOperator:
+    '='
+  | TIMEASSIGN_KW
+  | DIVIDEASSIGN_KW
+  | MODASSIGN_KW
+  | PLUSASSIGN_KW
+  | MINUSASSIGN_KW
+  | LSASSIGN_KW
+  | RSASSIGN_KW
+  | URSASSIGN_KW
+  | ANDASSIGN_KW
+  | NOTASSIGN_KW
+  | ORASSIGN_KW
+
+
+Expression:
+    AssignmentExpr
+  | Expression ',' AssignmentExpr
+
+
+Literal:
+    LITERAL_BOOLEAN
+    |  LITERAL_FLOAT
+    |  LITERAL_INT
+    |  LITERAL_STRING
+    |  LITERAL_NULL
+    
+
+Constructor:
+    THIS_KW '.' ConstructorCall
+  | ConstructorCall
+
+ConstructorCall:
+    Identifier
+  | Identifier '(' ArgumentList.Opt ')'
+  | Identifier '.' ConstructorCall
+
+
+Identifier:
+    IDENTIFIER_KW
+
+%%
+
+/* --------------- Fin de la grammaire --------------- */
+

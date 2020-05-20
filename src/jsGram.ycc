@@ -1,0 +1,875 @@
+/******************************************************************************
+* Fichier: jsGram.ycc.
+* Desc: grammaire en yacc pour compiler le langage JScript.
+* Module: AkraLog : JScripter.
+* Revision: 5 novembre 1997 : REV 0 : Hugo DesRosiers : Creation.
+******************************************************************************/
+
+%{
+/* On met ici les declaration et les fichiers inclus */
+
+#include <stdio.h>
+#undef yylex
+#include "jscFlexer.h"
+#define yylex jscrlex
+#include "specialTypes.h"
+#include "interpreter.h"
+#include "statements.h"
+#include "expressions.h"
+#include "fctDefinition.h"
+#include "varDecl.h"
+#include "identifier.h"
+#include "lists.h"
+
+#define YYDEBUG	1
+
+extern void jscrerror(char *);
+extern int jscrlex(void);
+
+extern JsInterpreter *interpreter;
+
+%}
+
+
+/**************************************************************
+* Keywords of the language, and other meta-characters.
+**************************************************************/
+%token IDENTIFIER_KW
+%token LITERAL_BOOLEAN
+%token LITERAL_FLOAT
+%token LITERAL_INT
+%token LITERAL_LONG
+%token LITERAL_STRING
+%token LITERAL_NULL
+
+%token ABSTRACT_KW
+%token BOOLEAN_KW
+%token BREAK_KW
+%token BYTE_KW
+%token CASE_KW
+%token CATCH_KW
+%token CHAR_KW
+%token CLASS_KW
+%token CONST_KW
+%token CONTINUE_KW
+%token DEFAULT_KW
+%token DELETE_KW
+%token DO_KW
+%token DOUBLE_KW
+%token ELSE_KW
+%token EXTENDS_KW
+%token FINAL_KW
+%token FINALLY_KW
+%token FLOAT_KW
+%token FOR_KW
+%token FUNCTION_KW
+%token GOTO_KW
+%token IF_KW
+%token IMPLEMENTS_KW
+%token IMPORT_KW
+%token IN_KW
+%token INSTANCEOF_KW
+%token INT_KW
+%token INTERFACE_KW
+%token LONG_KW
+%token NATIVE_KW
+%token NEW_KW
+%token PACKAGE_KW
+%token PRIVATE_KW
+%token PROTECTED_KW
+%token PUBLIC_KW
+%token RETURN_KW
+%token SHORT_KW
+%token STATIC_KW
+%token SUPER_KW
+%token SWITCH_KW
+%token SYNCHRONIZED_KW
+%token THIS_KW
+%token THROW_KW
+%token THROWS_KW
+%token TRANSIENT_KW
+%token TRY_KW
+%token TYPEOF_KW
+%token VAR_KW
+%token VOID_KW
+%token VOLATILE_KW
+%token WHILE_KW
+%token WITH_KW
+
+%token LS_KW
+%token URS_KW
+%token RS_KW
+%token ICR_KW
+%token DECR_KW
+%token ANDAND_KW
+%token OROR_KW
+%token PLUSASSIGN_KW
+%token MINUSASSIGN_KW
+%token TIMEASSIGN_KW
+%token DIVIDEASSIGN_KW
+%token ANDASSIGN_KW
+%token ORASSIGN_KW
+%token NOTASSIGN_KW
+%token MODASSIGN_KW
+%token LSASSIGN_KW
+%token RSASSIGN_KW
+%token URSASSIGN_KW
+
+/****************************************************************
+* Container for all elements produced during parsing.
+****************************************************************/
+
+%union
+{
+    bool boolValue;
+    wchar *string;
+    int	 integerNumber;
+    unsigned int flag;
+    float floatNumber;
+    int longNumber[2];
+    double doubleNumber;
+    JsSyntaxElement *syntaxElement;
+    JsStatement *statement;
+    JsExpression *expression;
+    JsVarDeclaration *varDecl;
+    JsIdentifier *identifier;
+    JsStatementList *statList;
+    JsExprList *exprList;
+    JsVarDeclList *varDeclList;
+    JsIdentList *identList;
+    JsFunctionDef *fctDef;
+}
+
+
+/****************************************************************
+* Section: Typing of the objects returned by the non-terminals.
+****************************************************************/
+
+%type <string> IDENTIFIER_KW
+%type <expression> Literal
+%type <boolValue> LITERAL_BOOLEAN
+%type <floatNumber> LITERAL_FLOAT
+%type <integerNumber> LITERAL_INT
+%type <string> LITERAL_STRING
+%type <integerNumber> LITERAL_NULL
+
+%type <syntaxElement> ForInit.Opt	ForInit	ForInInit
+
+%type <varDeclList> VariableIntroductions	VariableDeclarationList
+%type <identList> ParameterList.Opt	ParameterList
+%type <statList> StatementList.Opt	StatementList
+%type <exprList> Arguments	ArgumentList
+
+%type <fctDef> FunctionDefinition
+
+%type <statement> Statement
+%type <statement> BlockStat	VariableStat
+%type <statement> EmptyStat	ExpressionStat
+%type <statement> IfThenStat	IterationStat
+%type <statement> ContinueStat	BreakStat
+%type <statement> ReturnStat	WithStat
+%type <statement> WhileStat	ForStat
+%type <statement> ForInStat	DoStat
+%type <statement> SwitchStat	LabeledStat
+
+%type <varDecl> VariableDeclaration
+
+%type <expression> Initializer.Opt	AssignmentExpr
+%type <expression> Expression	Expression.Opt
+%type <expression> PrimaryExpr	MemberExpr
+%type <expression> Literal	NewExpr
+%type <expression> CallExpr	LeftHandSideExpr
+%type <expression> PostfixExpr	UnaryExpr
+%type <expression> MultiplicativeExpr	AdditiveExpr
+%type <expression> ShiftExpr	RelationalExpr
+%type <expression> EqualityExpr	BitAndExpr	BitXorExpr
+%type <expression> BitIorExpr	LogicalAndExpr
+%type <expression> LogicalOrExpression	ConditionalExpr
+
+%type <identifier> Identifier
+%type <integerNumber> AssignmentOperator
+
+
+%left ';'
+%right '='
+%left '(' ')'
+%left ','
+%left '?'
+%left '|'
+%left '^'
+%left '&'
+%left EQ_KW NE_KW
+%left '>' '<' GE_KW LE_KW 
+/*
+%left '>' '<' '=' GE_KW LE_KW NE_KW
+*/
+%left URS_KW RS_KW LS_KW
+%right  '~'
+%left '+' '-'
+%left '*' '/' '%'
+%left '.'
+
+
+%start Program
+
+/* --------------- Debut de la grammaire --------------- */
+%%
+
+/* Compilation Unit. */
+Program:
+    /* Nothing */
+    | ElementList
+
+ElementList:
+    Element
+  | ElementList Element
+
+
+Element:
+    Statement
+    {
+	interpreter->execStatement($1);
+    }
+  | FunctionDefinition
+  {
+	interpreter->addFunction($1);
+  }
+
+
+/**** Statements. ****/
+
+Statement:
+    BlockStat
+  | VariableStat
+  | EmptyStat
+  | ExpressionStat
+  | IfThenStat
+  | IterationStat
+  | ContinueStat
+  | BreakStat
+  | ReturnStat
+  | WithStat
+  | SwitchStat
+  | LabeledStat
+  
+
+BlockStat:
+    '{' StatementList.Opt '}'
+    {
+	$$= new JsBlockStat($2);
+    }
+
+StatementList.Opt:
+    {
+	$$= NULL;
+    }
+  | StatementList
+
+
+StatementList:
+    Statement
+    {
+	$$= new JsStatementList($1);
+    }
+  | StatementList Statement
+    {
+	$1->addElement($2);
+    }
+
+
+VariableStat:
+     VariableIntroductions ';'
+    {
+	$$= new JsVariableStat($1);
+    }
+
+
+VariableIntroductions:
+    VAR_KW VariableDeclarationList
+    {
+	$$= $2;
+    }
+
+
+VariableDeclarationList:
+    VariableDeclaration
+    {
+	$$= new JsVarDeclList($1);
+    }
+  | VariableDeclarationList ',' VariableDeclaration
+    {
+	$1->addElement($3);
+    }
+
+
+VariableDeclaration:
+    Identifier Initializer.Opt
+    {
+	$$= new JsVarDeclaration($1, $2);
+    }
+
+
+Initializer.Opt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | '=' AssignmentExpr
+    {
+	$$= $2;
+    }
+
+
+EmptyStat:
+    ';'
+    {
+	$$= NULL;
+    }
+
+
+ExpressionStat:
+    Expression ';'
+    {
+	$$= new JsExpressionStat($1);
+    }
+
+
+IfThenStat:
+    IF_KW '(' Expression ')' Statement
+    {
+	$$= new JsIfThenStat($3, $5, NULL);
+    }
+  | IF_KW '(' Expression ')' Statement ELSE_KW Statement
+    {
+	$$= new JsIfThenStat($3, $5, $7);
+    }
+
+
+IterationStat:
+  WhileStat
+  | ForStat
+  | ForInStat
+  | DoStat
+
+
+WhileStat:
+    WHILE_KW '(' Expression ')' Statement
+    {
+	$$= new JsWhileStat($3, $5);
+    }
+
+
+ForStat:
+    FOR_KW '(' ForInit.Opt ';' Expression.Opt ';' Expression.Opt ')' Statement
+    {
+	if ($3 == NULL) {
+	    $$= new JsForStat((JsExpression *)NULL, $5, $7, $9);
+	}
+	else	if ($3->category() == JsSyntaxElement::scExpression) {
+	    $$= new JsForStat((JsExpression *)$3, $5, $7, $9);
+	}
+	else {
+	    $$= new JsForStat((JsVarDeclList *)$3, $5, $7, $9);
+	}
+    }
+
+
+ForInit.Opt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | ForInit
+
+
+ForInit:
+    Expression
+    {
+	$$= (JsSyntaxElement *)$1;
+    }
+  | VariableIntroductions
+    {
+	$$= (JsSyntaxElement *)$1;
+    }
+
+
+ForInStat:
+    FOR_KW '(' ForInInit IN_KW Expression ')' Statement
+    {
+	if ($3->category() == JsSyntaxElement::scExpression) {
+	    $$= new JsForInStat((JsExpression *)$3, $5, $7);
+	}
+	else {
+	    $$= new JsForInStat((JsVarDeclaration *)$3, $5, $7);
+	}
+    }
+
+ForInInit:
+    LeftHandSideExpr
+    {
+	$$= (JsSyntaxElement *)$1;
+    }
+  | VAR_KW Identifier Initializer.Opt
+    {
+	$$= (JsSyntaxElement *)new JsVarDeclaration($2, $3);
+    }
+
+
+DoStat:
+    DO_KW Statement WHILE_KW '(' Expression ')' ';'
+    {
+	/*
+		$$= new JsWhileStat($3, $5);
+	*/
+    }
+
+ContinueStat:
+    CONTINUE_KW ';'
+    {
+	$$= new JsContinueStat();
+    }
+
+
+BreakStat:
+    BREAK_KW ';'
+    {
+	$$= new JsBreakStat();
+    }
+
+
+
+ReturnStat:
+    RETURN_KW Expression.Opt ';'
+    {
+	$$= new JsReturnStat($2);
+    }
+
+
+WithStat:
+    WITH_KW '(' Expression ')' Statement
+    {
+	$$= new JsWithStat($3, $5);
+    }
+
+
+SwitchStat:
+    SWITCH_KW '(' Expression ')' BlockStat
+    {
+	/* TODO. */
+	$$= NULL;
+    }
+
+
+LabeledStat:
+    Identifier ':' Statement
+    {
+	/* TODO. */
+	$$= NULL;
+    }
+  | CASE_KW Literal ':' Statement
+    {
+	/* TODO. */
+	$$= NULL;
+    }
+
+
+FunctionDefinition:
+    FUNCTION_KW Identifier '(' ParameterList.Opt ')' BlockStat
+    {
+	$$= new JsFunctionDef($2, $4, $6);
+    }
+
+
+ParameterList.Opt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | ParameterList
+
+
+ParameterList:
+    Identifier
+    {
+	$$= new JsIdentList($1);
+    }
+  | ParameterList ',' Identifier
+    {
+	$1->addElement($3);
+    }
+
+
+/*------------ Expressions --------------*/
+
+Expression.Opt:
+    /* Nothing. */
+    {
+	$$= NULL;
+    }
+  | Expression
+
+
+PrimaryExpr:
+    Literal
+  | Identifier
+    {
+	/* Faire une reference var. */
+    }
+  | THIS_KW
+    {
+	/* Faire une reference 'var' speciale. */
+    }
+  | '(' Expression ')'
+    {
+	$$= $2;
+    }
+
+
+MemberExpr:
+    PrimaryExpr
+  | MemberExpr '[' Expression ']'
+    {
+	$$= new JsArrayExpr($1, $3);
+    }
+  | MemberExpr '.' Identifier
+    {
+	$$= new JsFieldExpr($1, $3);
+    }
+  | NEW_KW MemberExpr Arguments
+    {
+	$$= new JsNewExpr($2, $3);
+    }
+
+
+NewExpr:
+    MemberExpr
+  | NEW_KW NewExpr
+    {
+	$$= new JsNewExpr($2, NULL);
+    }
+
+
+CallExpr:
+    MemberExpr Arguments
+    {
+	$$= new JsCallExpr($1, $2);
+    }
+  | CallExpr Arguments
+    {
+	$$= new JsCallExpr($1, $2);
+    }
+  | CallExpr '[' Expression ']'
+    {
+	$$= new JsArrayExpr($1, $3);
+    }
+  | CallExpr '.' Identifier
+    {
+	$$= new JsFieldExpr($1, $3);
+    }
+
+
+Arguments:
+    '(' ')'
+    {
+	$$= NULL;
+    }
+  | '(' ArgumentList ')'
+    {
+	$$= $2;
+    }
+
+    
+ArgumentList:
+    AssignmentExpr
+      {
+	$$= new JsExprList($1);
+      }
+  | ArgumentList ',' AssignmentExpr
+    {
+	$1->addElement($3);
+    }
+
+
+LeftHandSideExpr:
+    NewExpr
+  | CallExpr
+
+
+PostfixExpr:
+    LeftHandSideExpr
+  | LeftHandSideExpr ICR_KW
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::postIncr, $1, NULL);
+    }    
+  | LeftHandSideExpr DECR_KW
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::postDecr, $1, NULL);
+    }    
+
+
+UnaryExpr:
+    PostfixExpr
+  | DELETE_KW UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::del, $2, NULL);
+    }    
+  | VOID_KW UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::opVoid, $2, NULL);
+    }    
+  | TYPEOF_KW UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::opTypeof, $2, NULL);
+    }    
+  | ICR_KW UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::preIncr, $2, NULL);
+    }    
+  | DECR_KW UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::preDecr, $2, NULL);
+    }    
+  | '+' UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::posate, $2, NULL);
+    }    
+  | '-' UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::negate, $2, NULL);
+    }    
+  | '~' UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::bitnot, $2, NULL);
+    }    
+  | '!' UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::loginot, $2, NULL);
+    }    
+
+    
+MultiplicativeExpr:
+    UnaryExpr
+  | MultiplicativeExpr '*' UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::mult, $1, $3);
+    }    
+  | MultiplicativeExpr '/' UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::div, $1, $3);
+    }    
+  | MultiplicativeExpr '%' UnaryExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::mod, $1, $3);
+    }    
+
+
+AdditiveExpr:
+    MultiplicativeExpr
+  | AdditiveExpr '+' MultiplicativeExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::add, $1, $3);
+    }    
+  | AdditiveExpr '-' MultiplicativeExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::sub, $1, $3);
+    }    
+
+  
+ShiftExpr:
+    AdditiveExpr
+  | ShiftExpr LS_KW AdditiveExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::lshift, $1, $3);
+    }    
+  | ShiftExpr RS_KW AdditiveExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::rshift, $1, $3);
+    }    
+  | ShiftExpr URS_KW AdditiveExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::rushift, $1, $3);
+    }    
+
+
+RelationalExpr:
+    ShiftExpr
+  | RelationalExpr '<' ShiftExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::lt, $1, $3);
+    }    
+  | RelationalExpr '>' ShiftExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::gt, $1, $3);
+    }    
+  | RelationalExpr GE_KW ShiftExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::ge, $1, $3);
+    }    
+  | RelationalExpr LE_KW ShiftExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::le, $1, $3);
+    }    
+
+
+EqualityExpr:
+    RelationalExpr
+  | EqualityExpr EQ_KW RelationalExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::eq, $1, $3);
+    }    
+  | EqualityExpr NE_KW RelationalExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::ne, $1, $3);
+    }    
+
+
+BitAndExpr:
+    EqualityExpr
+  | BitAndExpr '&' EqualityExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::bitAnd, $1, $3);
+    }    
+
+
+BitXorExpr:
+    BitAndExpr
+  | BitXorExpr '^' BitAndExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::bitXor, $1, $3);
+    }    
+
+
+BitIorExpr:
+    BitXorExpr
+  | BitIorExpr '|' BitXorExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::bitIor, $1, $3);
+    }    
+
+
+LogicalAndExpr:
+    BitIorExpr
+  | LogicalAndExpr ANDAND_KW BitIorExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::logiAnd, $1, $3);
+    }    
+
+
+LogicalOrExpression:
+    LogicalAndExpr
+  | LogicalOrExpression OROR_KW LogicalAndExpr
+    {
+	$$= new JsOperatorExpr(JsOperatorExpr::logiOr, $1, $3);
+    }    
+
+
+ConditionalExpr:
+    LogicalOrExpression
+  | LogicalOrExpression '?' AssignmentExpr ':' AssignmentExpr
+    {
+	$$= new JsCondExpr($1, $3, $5);
+    }    
+
+
+AssignmentExpr:
+    ConditionalExpr
+  | LeftHandSideExpr AssignmentOperator AssignmentExpr
+    {
+	$$= new JsOperatorExpr((JsOperatorExpr::Operator)$2, $1, $3);
+    }    
+
+
+AssignmentOperator:
+    '='
+    {
+	$$= JsOperatorExpr::put;
+    }
+  | TIMEASSIGN_KW
+    {
+	$$= JsOperatorExpr::multPut;
+    }
+  | DIVIDEASSIGN_KW
+    {
+	$$= JsOperatorExpr::divPut;
+    }
+  | MODASSIGN_KW
+    {
+	$$= JsOperatorExpr::modPut;
+    }
+  | PLUSASSIGN_KW
+    {
+	$$= JsOperatorExpr::addPut;
+    }
+  | MINUSASSIGN_KW
+    {
+	$$= JsOperatorExpr::subPut;
+    }
+  | LSASSIGN_KW
+    {
+	$$= JsOperatorExpr::lshiftPut;
+    }
+  | RSASSIGN_KW
+    {
+	$$= JsOperatorExpr::rshiftPut;
+    }
+  | URSASSIGN_KW
+    {
+	$$= JsOperatorExpr::rushiftPut;
+    }
+  | ANDASSIGN_KW
+    {
+	$$= JsOperatorExpr::andPut;
+    }
+  | ORASSIGN_KW
+    {
+	$$= JsOperatorExpr::orPut;
+    }
+  | NOTASSIGN_KW
+    {
+	$$= JsOperatorExpr::notPut;
+    }
+
+
+Expression:
+    AssignmentExpr
+  | Expression ',' AssignmentExpr
+    {
+	$3->subLink($1);
+	$$= $3;
+    }
+
+
+Literal:
+    LITERAL_BOOLEAN
+    {
+	$$= new JsConstantExpr($1);
+    }
+    |  LITERAL_FLOAT
+    {
+	$$= new JsConstantExpr($1);
+    }
+    |  LITERAL_INT
+    {
+	$$= new JsConstantExpr($1);
+    }
+    |  LITERAL_STRING
+    {
+	$$= new JsConstantExpr($1);
+    }
+    |  LITERAL_NULL
+    {
+	$$= new JsConstantExpr();
+    }
+    
+
+Identifier:
+    IDENTIFIER_KW
+    {
+	$$= new JsIdentifier($1);
+    }
+
+
+%%
+
+/* --------------- Fin de la grammaire --------------- */
+

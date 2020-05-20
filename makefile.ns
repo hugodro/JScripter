@@ -1,0 +1,59 @@
+#/************************************************
+#* File: makefile.
+#* Desc: Building definitions for the JavaScript Compiler.
+
+AKRAHOME= /Users/hugo/AkraLog/Projets
+PLZENHOME= $(AKRAHOME)/Plzen
+PROJECT= JScripter
+ARCHITECTURE= next_i386
+
+SRCS= test.c jsGram.ycc jscrTokens.lcc jscFlexer.cc \
+	lexhelp.cc \
+	syntaxElement.cc identifier.cc varDecl.cc \
+	expressions.cc statements.cc fctDefinition.cc \
+	lists.cc interpreter.cc
+
+OBJS= test.o jsGram.o jscrTokens.o jscFlexer.o \
+	lexhelp.o \
+	syntaxElement.o identifier.o varDecl.o \
+	expressions.o statements.o fctDefinition.o \
+	lists.o interpreter.o
+
+ARCHPATH= $(PLZENHOME)/bins/$(ARCHITECTURE)/$(PROJECT)
+VPATH= ../objs
+
+INC= -I$(AKRAHOME) -I$(AKRAHOME)/Plzen -I/usr/local/include
+LIBS= -lg++
+# Optional defines: YYDEBUG=1
+CFLAGS= -g -DYYDEBUG=1
+YACCFLAGS= -dv -p jscr
+#LEXFLAGS= -i -I
+LEXFLAGS= -+
+
+CC= cc
+YACC= bison
+LEX= flex
+
+.SUFFIXES: .c .cc
+
+all: jsTest
+
+jsTest: $(OBJS)
+	$(CC)  $(CFLAGS) -o  ../objs/$@ $(OBJS) $(LIBS)
+
+.c.o:
+	$(CC) $(INC) $(CFLAGS) -o $(ARCHPATH)/$@ -c  $<
+
+.cc.o:
+	$(CC) $(INC) $(CFLAGS) -o $(ARCHPATH)/$@ -c  $<
+
+
+
+jsGram.cc: jsGram.ycc
+	$(YACC) $(YACCFLAGS) -o $@ jsGram.ycc
+	mv jsGram.cc.h jsGram.h
+
+
+jscrTokens.cc: jscrTokens.lcc
+	$(LEX) $(LEXFLAGS) -o$@ jscrTokens.lcc
+

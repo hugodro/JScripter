@@ -1,0 +1,40 @@
+#/************************************************
+#* File: makefile.
+#* Desc: Building definitions for the JavaScript Compiler.
+
+PROJECT= JScripter
+
+include $(AKRAPROJ)/geneMake.lnx
+
+
+GRAMSRCS= jsGram.ycc jscrTokens.lcc
+SRCS= test.cpp jsGram.cpp jscrTokens.cpp jscFlexer.cpp \
+	lexhelp.cpp \
+	syntaxElement.cpp identifier.cpp varDecl.cpp \
+	expressions.cpp statements.cpp fctDefinition.cpp \
+	lists.cpp interpreter.cpp
+
+
+# Optional defines: YYDEBUG=1
+CFLAGS= -g -DYYDEBUG=1
+YACCFLAGS= -dv -p jscr
+#LEXFLAGS= -i -I
+LEXFLAGS= -+
+
+
+all: jsTest
+
+jsTest: $(OBJS)
+	( cd $(OBJ_PATH) && \
+	    $(CPP)  $(CFLAGS) -o $@ $(OBJS) $(LIBS) \
+	)
+
+
+jsGram.cpp: jsGram.ycc
+	$(YACC) $(YACCFLAGS) -o $@ jsGram.ycc
+	mv jsGram.cpp.h jsGram.h
+
+
+jscrTokens.cpp: jscrTokens.lcc
+	$(LEX) $(LEXFLAGS) -o$@ jscrTokens.lcc
+
